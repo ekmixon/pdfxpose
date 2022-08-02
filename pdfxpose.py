@@ -107,7 +107,7 @@ def extract_images(input_pdf_path, output_dir):
 
 	images = []
 	for ext in ['jpg','png','gif']:
-		images += glob.glob(os.path.join(image_dir,'*.'+ext))
+		images += glob.glob(os.path.join(image_dir, f'*.{ext}'))
 	return images
 
 
@@ -116,13 +116,9 @@ def extract_images(input_pdf_path, output_dir):
 
 def word_count(text, word_list):
 
-	count = 0
 	text = re.sub(r'\s+', '', text)
 
-	for word in word_list:
-		count += len(re.findall(word,text))
-
-	return count
+	return sum(len(re.findall(word,text)) for word in word_list)
 
 def set_status_message(message):
 	sys.stderr.write('\r'+' '*80 )
@@ -137,11 +133,16 @@ def set_status_message(message):
 # stream.
 
 def analyse_pdf(input_pdf_path):
-	
+
 	flat_text  = "" # Text visible after flattening / down merging layers into image 
 	layer_text = "" # Combine text from all layers (text and OCR images)
 
 	# Create a temporary directory to house working files
+	tmp_dir = tempfile.mkdtemp(prefix='tmp.pdfxpose-')
+
+	# Check to see how many image are in PDF, quit if too many (Or find faster way of proccessing )
+	image_count = pdf_image_count(input_pdf_path)
+
 	tmp_dir = tempfile.mkdtemp(prefix='tmp.pdfxpose-')
 
 	# Check to see how many image are in PDF, quit if too many (Or find faster way of proccessing )
@@ -160,7 +161,7 @@ def analyse_pdf(input_pdf_path):
 
 		# Flatten PDF page into a PNG image
 		set_status_message('Flattening PDF...')
-		flat_page = pdf2image(page, page + '.png')
+		flat_page = pdf2image(page, f'{page}.png')
 
 		# OCR the flattened PDF (only text visible to the user)
 		set_status_message('Performing OCR on PDF...')
@@ -185,13 +186,8 @@ def analyse_pdf(input_pdf_path):
 	flat_count  = word_count(flat_text.lower() , BANKING_KEYWORDS)
 	layer_count = word_count(layer_text.lower(), BANKING_KEYWORDS)
 
-	score = 0
-
-	if layer_count > flat_count:
-		score = 1
-	
-	print "\r%10d  %4d : %-7d  %-6d  %s" % (score, flat_count, layer_count, image_count, input_pdf_path)
-
+	score = 1 if layer_count > flat_count else 0
+	flat_text  = "" # Text visible after flattening / down merging layers into image 
 	# Remove temporary directory
 	set_status_message('Deleting temporary files...')
 	shutil.rmtree(tmp_dir)
